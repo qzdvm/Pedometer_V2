@@ -92,6 +92,8 @@ static uint8_t whoamI, rst;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+void lora_init_sequence(void);
+void acc_init_sequence(void);
 static void set_stop_mode(void);
 static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *bufp, uint16_t len);
 static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t len);
@@ -136,66 +138,12 @@ int main(void)
 	MX_RTC_Init();
 	MX_LPTIM1_Init();
 	/* USER CODE BEGIN 2 */
-	/*				LORA 				*/
-
 	LL_GPIO_SetOutputPin(CS_IMU_GPIO_Port, CS_IMU_Pin);
 	LL_GPIO_SetOutputPin(CS_LORA_GPIO_Port, CS_LORA_Pin);
-
-	radio.Modulation = LORA;
-	radio.COB = RFM98;
-	radio.Frequency = 434000;
-	radio.OutputPower = 17; //dBm
-	radio.PreambleLength = 12;
-	radio.FixedPktLength = false; //explicit header mode for LoRa
-	radio.PayloadLength = SIZEX(ac_lora_test);
-	radio.CrcDisable = true;
-	radio.SFSel = SF9;
-	radio.BWSel = BW125K;
-	radio.CRSel = CR4_5;
-	lora_init(&radio);
-	lora_standby();
-
-	dev_ctx.write_reg = platform_write;
-	dev_ctx.read_reg = platform_read;
-	dev_ctx.handle = SPI1;
-
-	delay_ms(k_BOOT_TIME);
-	ism330dhcx_device_id_get(&dev_ctx, &whoamI);
-	if (whoamI != ISM330DHCX_ID)
-		while (1);
-
-	/* Restore default configuration */
-	ism330dhcx_reset_set(&dev_ctx, PROPERTY_ENABLE);
-
-	do
-	{
-		ism330dhcx_reset_get(&dev_ctx, &rst);
-	} while (rst);
-
-	/* Start device configuration. */
-	ism330dhcx_i2c_interface_set(&dev_ctx, ISM330DHCX_I2C_DISABLE);
-	ism330dhcx_spi_mode_set(&dev_ctx, ISM330DHCX_SPI_4_WIRE);
-
-	ism330dhcx_device_conf_set(&dev_ctx, PROPERTY_ENABLE);
-	ism330dhcx_block_data_update_set(&dev_ctx, PROPERTY_ENABLE);
-	ism330dhcx_xl_data_rate_set(&dev_ctx, ISM330DHCX_XL_ODR_26Hz);
-	ism330dhcx_xl_full_scale_set(&dev_ctx, ISM330DHCX_4g);
-
-	/*****		ACTIVITY INACTIVITY		*****/
-
-	ism330dhcx_wkup_ths_weight_set(&dev_ctx, ISM330DHCX_LSb_FS_DIV_64); // FS_XL / 64
-	ism330dhcx_wkup_dur_set(&dev_ctx, 2); // (= val(max 3) * 1 / ODR_XL) = = 77 ms
-	ism330dhcx_act_sleep_dur_set(&dev_ctx, 0); // 16 / ODR_XL for 0  --- 512 / ODR for other val (615 ms)
-	ism330dhcx_wkup_threshold_set(&dev_ctx, 3); // val * (FS_XL / 64) 187.5 mg
-	ism330dhcx_act_mode_set(&dev_ctx, ISM330DHCX_XL_12Hz5_GY_NOT_AFFECTED);
-
-	ism330dhcx_pin_mode_set(&dev_ctx, ISM330DHCX_OPEN_DRAIN);
-	ism330dhcx_pin_polarity_set(&dev_ctx, ISM330DHCX_ACTIVE_HIGH);
-
-	ism330dhcx_pin_int2_route_get(&dev_ctx, &int2_route);
-	int2_route.md2_cfg.int2_sleep_change = PROPERTY_ENABLE;
-	ism330dhcx_pin_int2_route_set(&dev_ctx, &int2_route);
-
+	
+	lora_init_sequence();
+	acc_init_sequence();
+	
 	set_stop_mode();
 	/* USER CODE END 2 */
 
@@ -392,7 +340,66 @@ void callback_acc(void)
 	}
 }
 
+void lora_init_sequence(void)
+{
+	radio.Modulation = LORA;
+	radio.COB = RFM98;
+	radio.Frequency = 434000;
+	radio.OutputPower = 17; //dBm
+	radio.PreambleLength = 12;
+	radio.FixedPktLength = false; //explicit header mode for LoRa
+	radio.PayloadLength = SIZEX(ac_lora_test);
+	radio.CrcDisable = true;
+	radio.SFSel = SF9;
+	radio.BWSel = BW125K;
+	radio.CRSel = CR4_5;
+	lora_init(&radio);
+	lora_standby();
+}
 
+void acc_init_sequence(void)
+{
+	dev_ctx.write_reg = platform_write;
+	dev_ctx.read_reg = platform_read;
+	dev_ctx.handle = SPI1;
+
+	delay_ms(k_BOOT_TIME);
+	ism330dhcx_device_id_get(&dev_ctx, &whoamI);
+	if (whoamI != ISM330DHCX_ID)
+		while (1);
+
+	/* Restore default configuration */
+	ism330dhcx_reset_set(&dev_ctx, PROPERTY_ENABLE);
+
+	do
+	{
+		ism330dhcx_reset_get(&dev_ctx, &rst);
+	} while (rst);
+
+	/* Start device configuration. */
+	ism330dhcx_i2c_interface_set(&dev_ctx, ISM330DHCX_I2C_DISABLE);
+	ism330dhcx_spi_mode_set(&dev_ctx, ISM330DHCX_SPI_4_WIRE);
+
+	ism330dhcx_device_conf_set(&dev_ctx, PROPERTY_ENABLE);
+	ism330dhcx_block_data_update_set(&dev_ctx, PROPERTY_ENABLE);
+	ism330dhcx_xl_data_rate_set(&dev_ctx, ISM330DHCX_XL_ODR_26Hz);
+	ism330dhcx_xl_full_scale_set(&dev_ctx, ISM330DHCX_4g);
+
+	/*****		ACTIVITY INACTIVITY		*****/
+
+	ism330dhcx_wkup_ths_weight_set(&dev_ctx, ISM330DHCX_LSb_FS_DIV_64); // FS_XL / 64
+	ism330dhcx_wkup_dur_set(&dev_ctx, 2); // (= val(max 3) * 1 / ODR_XL) = = 77 ms
+	ism330dhcx_act_sleep_dur_set(&dev_ctx, 0); // 16 / ODR_XL for 0  --- 512 / ODR for other val (615 ms)
+	ism330dhcx_wkup_threshold_set(&dev_ctx, 3); // val * (FS_XL / 64) 187.5 mg
+	ism330dhcx_act_mode_set(&dev_ctx, ISM330DHCX_XL_12Hz5_GY_NOT_AFFECTED);
+
+	ism330dhcx_pin_mode_set(&dev_ctx, ISM330DHCX_OPEN_DRAIN);
+	ism330dhcx_pin_polarity_set(&dev_ctx, ISM330DHCX_ACTIVE_HIGH);
+
+	ism330dhcx_pin_int2_route_get(&dev_ctx, &int2_route);
+	int2_route.md2_cfg.int2_sleep_change = PROPERTY_ENABLE;
+	ism330dhcx_pin_int2_route_set(&dev_ctx, &int2_route);
+}
 static void delay_ms(uint32_t ms)
 {
 	__IO uint32_t tmp = SysTick->CTRL;
