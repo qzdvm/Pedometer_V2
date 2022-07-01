@@ -11,8 +11,10 @@
 #define k_LIE_DOWN_EXACT				8
 #define k_STANDING_POSSIBLE			4
 #define	k_STANDING_EXACT				8
-#define k_SYSTEM_CORE_CLOCK			16000000
-#define k_TO_ms						16000
+
+#define	k_SOH										0x01
+#define k_EOT										0x04
+#define k_PEDOMETER_DATA_SIZE		27
 
 #define SENSOR_BUS 						hi2c1
 

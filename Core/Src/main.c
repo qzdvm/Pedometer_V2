@@ -44,6 +44,7 @@ typedef struct
 	uint16_t w_steps;
 	uint16_t w_lie_down;
 	uint16_t w_standing;
+	uint16_t w_lie_down_cnt;
 	bool o_possible_lie_down;
 	bool o_exact_lie_down;
 	bool o_possible_standing;
@@ -66,26 +67,28 @@ typedef struct
 
 /* USER CODE BEGIN PV */
 static lora_t radio;
-static char ac_lora_test[] = "12345678901234567890";
-static char ac_lora_rx_buff[SIZEX(ac_lora_test)];
+static char ac_pedometer_data[k_PEDOMETER_DATA_SIZE] =
+{
+	[0] = k_SOH,
+	[k_PEDOMETER_DATA_SIZE - 1] = k_EOT,
+};
 
 static step_attr_t s_step;
 static rising_edge_detection_t s_step_red;
 static ton_t s_step_ton;
 
-static bool o_tilted = false;
-
 static stmdev_ctx_t dev_ctx;
 static ism330dhcx_pin_int2_route_t int2_route;
 static ism330dhcx_pin_int1_route_t int1_route;
-static uint8_t b_acc_wake_up_src;
-static uint8_t b_status_reg;
 
 static float af_acc_mg[3];
 static int16_t ai_acc_raw[3];
 
-static uint8_t whoamI, rst;
+static uint8_t b_acc_wake_up_src;
+static uint8_t b_status_reg;
 
+static uint8_t whoamI, rst;
+static bool o_tilted = false;
 
 /* USER CODE END PV */
 
@@ -285,11 +288,9 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 	// LORA send
 	if (b_rtc_wakeup == 90)
 	{
-		static int i = 0;
 // 	send LORA information every 15 min acc.to this callback period
 		b_rtc_wakeup = 0;
-		ac_lora_test[0] = ++i;
-		lora_send_msg(&radio, (uint8_t*) ac_lora_test, SIZEX(ac_lora_test));
+		lora_send_msg(&radio, (uint8_t*) ac_pedometer_data, k_PEDOMETER_DATA_SIZE);
 		CLEAR_STRUCT(s_step);
 	}
 	++b_rtc_wakeup;
@@ -348,7 +349,7 @@ void lora_init_sequence(void)
 	radio.OutputPower = 17; //dBm
 	radio.PreambleLength = 12;
 	radio.FixedPktLength = false; //explicit header mode for LoRa
-	radio.PayloadLength = SIZEX(ac_lora_test);
+	radio.PayloadLength = k_PEDOMETER_DATA_SIZE;
 	radio.CrcDisable = true;
 	radio.SFSel = SF9;
 	radio.BWSel = BW125K;
