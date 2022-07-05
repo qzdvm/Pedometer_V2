@@ -58,6 +58,7 @@
 extern RTC_HandleTypeDef hrtc;
 /* USER CODE BEGIN EV */
 void callback_acc(void);
+void callback_btn(void);
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -165,14 +166,14 @@ void EXTI4_15_IRQHandler(void)
   {
     LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_14);
     /* USER CODE BEGIN LL_EXTI_LINE_14 */
-
+		callback_acc();
     /* USER CODE END LL_EXTI_LINE_14 */
   }
   if (LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_15) != RESET)
   {
     LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_15);
     /* USER CODE BEGIN LL_EXTI_LINE_15 */
-		callback_acc();
+		callback_btn();
     /* USER CODE END LL_EXTI_LINE_15 */
   }
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */

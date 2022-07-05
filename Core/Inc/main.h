@@ -72,9 +72,6 @@ void Error_Handler(void);
 #define INT1_Pin LL_GPIO_PIN_14
 #define INT1_GPIO_Port GPIOC
 #define INT1_EXTI_IRQn EXTI4_15_IRQn
-#define INT2_Pin LL_GPIO_PIN_15
-#define INT2_GPIO_Port GPIOC
-#define INT2_EXTI_IRQn EXTI4_15_IRQn
 #define CS_IMU_Pin LL_GPIO_PIN_3
 #define CS_IMU_GPIO_Port GPIOA
 #define CS_LORA_Pin LL_GPIO_PIN_4
@@ -83,6 +80,7 @@ void Error_Handler(void);
 #define DIO0_GPIO_Port GPIOA
 #define BTN_Pin LL_GPIO_PIN_15
 #define BTN_GPIO_Port GPIOA
+#define BTN_EXTI_IRQn EXTI4_15_IRQn
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

@@ -41,14 +41,13 @@
 /* USER CODE BEGIN PTD */
 typedef struct
 {
+	uint32_t dw_id;
+	uint32_t dw_ref;
+	uint16_t w_rec;
 	uint16_t w_steps;
-	uint16_t w_lie_down;
-	uint16_t w_standing;
-	uint16_t w_lie_down_cnt;
-	bool o_possible_lie_down;
-	bool o_exact_lie_down;
-	bool o_possible_standing;
-	bool o_exact_standing;
+	uint8_t b_time_of_rest;
+	uint8_t b_time_of_stand;
+	uint8_t b_rest_stand_cnt;
 	bool o_step_detected;
 } step_attr_t;
 
@@ -67,13 +66,18 @@ typedef struct
 
 /* USER CODE BEGIN PV */
 static lora_t radio;
-static char ac_pedometer_data[k_PEDOMETER_DATA_SIZE] =
+static uint8_t ab_pedometer_data[k_PEDOMETER_DATA_SIZE] =
 {
 	[0] = k_SOH,
 	[k_PEDOMETER_DATA_SIZE - 1] = k_EOT,
 };
 
-static step_attr_t s_step;
+static step_attr_t s_step = 
+{
+	.dw_id = k_ID,
+	.dw_ref = k_REF,
+	.w_rec = k_REC,
+};
 static rising_edge_detection_t s_step_red;
 static ton_t s_step_ton;
 
@@ -110,104 +114,110 @@ static void delay_ms(uint32_t ms);
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
-	/* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-	/* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Configure the system clock */
-	SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-	/* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-	/* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_SPI1_Init();
-	MX_RTC_Init();
-	MX_LPTIM1_Init();
-	/* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_SPI1_Init();
+  MX_RTC_Init();
+  MX_LPTIM1_Init();
+  /* USER CODE BEGIN 2 */
 	LL_GPIO_SetOutputPin(CS_IMU_GPIO_Port, CS_IMU_Pin);
 	LL_GPIO_SetOutputPin(CS_LORA_GPIO_Port, CS_LORA_Pin);
 	
 	lora_init_sequence();
 	acc_init_sequence();
 	
+	ab_pedometer_data[1] = (uint8_t)(s_step.dw_id);
+	ab_pedometer_data[2] = (uint8_t)(s_step.dw_id >> 8);
+	ab_pedometer_data[3] = (uint8_t)(s_step.dw_id >> 16);
+	ab_pedometer_data[4] = (uint8_t)(s_step.dw_id >> 24);
+	
 	set_stop_mode();
-	/* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1)
 	{
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-		/* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
-	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
-	RCC_PeriphCLKInitTypeDef PeriphClkInit = { 0 };
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-	/** Configure the main internal regulator output voltage
-	 */
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-	/** Initializes the RCC Oscillators according to the specified parameters
-	 * in the RCC_OscInitTypeDef structure.
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI | RCC_OSCILLATORTYPE_LSI;
-	RCC_OscInitStruct.HSIState = RCC_HSI_DIV4;
-	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-	RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	{
-		Error_Handler();
-	}
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_DIV4;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV4;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-	{
-		Error_Handler();
-	}
-	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC | RCC_PERIPHCLK_LPTIM1;
-	PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-	PeriphClkInit.LptimClockSelection = RCC_LPTIM1CLKSOURCE_LSI;
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_LPTIM1;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+  PeriphClkInit.LptimClockSelection = RCC_LPTIM1CLKSOURCE_LSI;
 
-	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-	{
-		Error_Handler();
-	}
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
@@ -241,7 +251,14 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t 
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-	static uint8_t b_rtc_wakeup = 0;
+	static uint8_t b_rtc_wakeup_cnt = 0;
+	static uint8_t b_standing_watch_cnt = 0;
+	static uint8_t b_rest_watch_cnt = 0;
+	static bool	o_standing = true;
+	static bool o_resting = false;
+	
+	static bool o_rest = false;
+	static bool o_stand = false;
 
 	SystemClock_Config();
 
@@ -256,44 +273,92 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 	{
 		o_tilted = false;
 	}
-	if (o_tilted && !s_step.o_step_detected) // watch lie-down
+	if (o_tilted && !s_step.o_step_detected) // watch resting
 	{
-		++s_step.w_lie_down;
+		o_resting = true;
+		o_standing = false;
 	}
 	else if (!o_tilted && s_step.o_step_detected) // watch standing
 	{
-		++s_step.w_standing;
+		o_standing = true;
+		o_resting = false;
 	}
 
-	if (s_step.w_lie_down >= k_LIE_DOWN_POSSIBLE)
+	if (o_resting && !o_standing)	// RESTING
 	{
-		s_step.o_possible_lie_down = true;
+		++b_rest_watch_cnt;
+		if(b_rest_watch_cnt >= k_REST_EXACT)
+		{
+			++s_step.b_time_of_rest;
+			if(o_stand)
+			{
+					o_rest = true;
+			}
+		}
 	}
-	if (s_step.w_lie_down >= k_LIE_DOWN_EXACT)
+	
+	if(o_standing && !o_resting)  // STANDING
 	{
-		s_step.o_exact_lie_down = true;
+		++b_standing_watch_cnt;
+		if (b_standing_watch_cnt >= k_STAND_EXACT)
+		{
+			++s_step.b_time_of_stand;
+			o_stand = true;
+		}
+	}
+	
+	if(o_stand && o_rest)
+	{
+		o_stand = false;
+		o_rest = false;
+		++s_step.b_rest_stand_cnt;
 	}
 
-	if (s_step.w_standing >= k_STANDING_POSSIBLE)
-	{
-		s_step.o_possible_standing = true;
-	}
-	if (s_step.w_standing >= k_STANDING_EXACT)
-	{
-		s_step.o_exact_standing = true;
-	}
-
+	
 	s_step.o_step_detected = false;
-
+	
 	// LORA send
-	if (b_rtc_wakeup == 90)
+	if (b_rtc_wakeup_cnt == 24) // 18 is 3 min : 90 is 15 min
 	{
-// 	send LORA information every 15 min acc.to this callback period
-		b_rtc_wakeup = 0;
-		lora_send_msg(&radio, (uint8_t*) ac_pedometer_data, k_PEDOMETER_DATA_SIZE);
+		// 	send LORA information every 15 min acc.to this callback period
+		b_rtc_wakeup_cnt = 0;
+		
+		ab_pedometer_data[5] = (uint8_t)(s_step.dw_ref);
+		ab_pedometer_data[6] = (uint8_t)(s_step.dw_ref >> 8);
+		ab_pedometer_data[7] = (uint8_t)(s_step.dw_ref >> 16);
+		ab_pedometer_data[8] = (uint8_t)(s_step.dw_ref >> 24);
+		
+		// w_rec pedometre verisi degildir, silinecek
+		ab_pedometer_data[9] = (uint8_t)(s_step.w_rec);
+		ab_pedometer_data[10] = (uint8_t)(s_step.w_rec >> 8);
+		
+		ab_pedometer_data[11] = (uint8_t)(s_step.w_steps);
+		ab_pedometer_data[12] = (uint8_t)(s_step.w_steps >> 8);
+		
+		ab_pedometer_data[13] = (uint8_t)(s_step.b_time_of_rest);
+		ab_pedometer_data[14] = (uint8_t)(s_step.b_rest_stand_cnt);
+		
+		/*
+		
+	receive example 
+	w_tmp = ab_pedometer_data[10];
+	w_tmp <<= 8;
+	w_tmp |= ab_pedometer_data[9];
+	
+		*/
+
+		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+		//reset step struct
 		CLEAR_STRUCT(s_step);
+		// reset local variables
+		b_rtc_wakeup_cnt = 0;
+		b_standing_watch_cnt = 0;
+		b_rest_watch_cnt = 0;
+		o_stand = false;
+		o_rest = false;
+
 	}
-	++b_rtc_wakeup;
+	++b_rtc_wakeup_cnt;
 }
 
 void callback_acc(void)
@@ -339,6 +404,27 @@ void callback_acc(void)
 			}
 		}
 	}
+}
+
+void callback_btn(void)
+{
+	delay_ms(10);
+		ab_pedometer_data[5] = (uint8_t)(s_step.dw_ref);
+		ab_pedometer_data[6] = (uint8_t)(s_step.dw_ref >> 8);
+		ab_pedometer_data[7] = (uint8_t)(s_step.dw_ref >> 16);
+		ab_pedometer_data[8] = (uint8_t)(s_step.dw_ref >> 24);
+		
+		// w_rec pedometre verisi degildir, silinecek
+		ab_pedometer_data[9] = (uint8_t)(s_step.w_rec);
+		ab_pedometer_data[10] = (uint8_t)(s_step.w_rec >> 8);
+		
+		ab_pedometer_data[11] = (uint8_t)(s_step.w_steps);
+		ab_pedometer_data[12] = (uint8_t)(s_step.w_steps >> 8);
+		
+		ab_pedometer_data[13] = (uint8_t)(s_step.b_time_of_rest);
+		ab_pedometer_data[14] = (uint8_t)(s_step.b_rest_stand_cnt);
+	
+	lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
 }
 
 void lora_init_sequence(void)
@@ -397,9 +483,13 @@ void acc_init_sequence(void)
 	ism330dhcx_pin_mode_set(&dev_ctx, ISM330DHCX_OPEN_DRAIN);
 	ism330dhcx_pin_polarity_set(&dev_ctx, ISM330DHCX_ACTIVE_HIGH);
 
-	ism330dhcx_pin_int2_route_get(&dev_ctx, &int2_route);
-	int2_route.md2_cfg.int2_sleep_change = PROPERTY_ENABLE;
-	ism330dhcx_pin_int2_route_set(&dev_ctx, &int2_route);
+//	ism330dhcx_pin_int2_route_get(&dev_ctx, &int2_route);
+//	int2_route.md2_cfg.int2_sleep_change = PROPERTY_ENABLE;
+//	ism330dhcx_pin_int2_route_set(&dev_ctx, &int2_route);
+
+	ism330dhcx_pin_int1_route_get(&dev_ctx, &int1_route);
+	int1_route.md1_cfg.int1_sleep_change = PROPERTY_ENABLE;
+	ism330dhcx_pin_int1_route_set(&dev_ctx, &int1_route);
 }
 static void delay_ms(uint32_t ms)
 {
@@ -418,18 +508,18 @@ static void delay_ms(uint32_t ms)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
-	/* USER CODE BEGIN Error_Handler_Debug */
+  /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1)
 	{
 	}
-	/* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
