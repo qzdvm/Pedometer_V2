@@ -339,12 +339,10 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 		ab_pedometer_data[14] = (uint8_t)(s_step.b_rest_stand_cnt);
 		
 		/*
-		
-	receive example 
-	w_tmp = ab_pedometer_data[10];
-	w_tmp <<= 8;
-	w_tmp |= ab_pedometer_data[9];
-	
+		receive example 
+		w_tmp = ab_pedometer_data[10];
+		w_tmp <<= 8;
+		w_tmp |= ab_pedometer_data[9];
 		*/
 
 		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
