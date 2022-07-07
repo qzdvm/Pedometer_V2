@@ -4,13 +4,16 @@
 #define k_BOOT_TIME      				5000
 // this acceleretions matchs with tilt-sensor tilt on z axis.
 // for other axises, imu must be match with tilt-sensor
-#define k_X_ACCEL_PRESET1				850
-#define k_X_ACCEL_PRESET2				860
-#define k_STEP_DEBOUNCE					4440//201 ms 1 LSB = (1/37Khz) and 7437 = 201 ms (LPTIM1 set for 37KHz) , 5920 = 160 ms, 120 ms = 4440, 3700 = 100 ms
+//#define k_X_ACCEL_PRESET1				850
+//#define k_X_ACCEL_PRESET2				860
+//#define k_STEP_DEBOUNCE					3700// 1 LSB = (1/37Khz) and 7437 = 201 ms (LPTIM1 set for 37KHz) , 5920 = 160 ms, 120 ms = 4440, 3700 = 100 ms
+#define k_WATCH_RTC_WAKEUP			7437 //201 ms
 #define k_REST_POSSIBLE			4
 #define k_REST_EXACT				8
 #define k_STAND_POSSIBLE		4
 #define	k_STAND_EXACT				8
+
+#define k_SEND_LORA					24 // 24 * 10 / 60	
 
 #define	k_SOH										0x01
 #define k_EOT										0x04

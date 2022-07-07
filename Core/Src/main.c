@@ -80,6 +80,7 @@ static step_attr_t s_step =
 };
 static rising_edge_detection_t s_step_red;
 static ton_t s_step_ton;
+static ton_t s_watch_rtc_wakeup;
 
 static stmdev_ctx_t dev_ctx;
 static ism330dhcx_pin_int2_route_t int2_route;
@@ -90,9 +91,21 @@ static int16_t ai_acc_raw[3];
 
 static uint8_t b_acc_wake_up_src;
 static uint8_t b_status_reg;
+static uint8_t b_rtc_wakeup_cnt;
 
 static uint8_t whoamI, rst;
 static bool o_tilted = false;
+
+static uint8_t b_standing_watch_cnt = 0;
+static uint8_t b_rest_watch_cnt = 0;
+static bool	o_standing = true;
+static bool o_resting = false;
+static bool o_rest = false;
+static bool o_stand = false;
+
+uint32_t k_X_ACCEL_PRESET1=				850;
+uint32_t k_X_ACCEL_PRESET2=				860;
+uint32_t k_STEP_DEBOUNCE=					3700;
 
 /* USER CODE END PV */
 
@@ -101,6 +114,8 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void lora_init_sequence(void);
 void acc_init_sequence(void);
+void assign_data(void);
+void reset_vars_after_15min(void);
 static void set_stop_mode(void);
 static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *bufp, uint16_t len);
 static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t len);
@@ -161,6 +176,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
 	while (1)
 	{
     /* USER CODE END WHILE */
@@ -251,15 +267,6 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t 
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-	static uint8_t b_rtc_wakeup_cnt = 0;
-	static uint8_t b_standing_watch_cnt = 0;
-	static uint8_t b_rest_watch_cnt = 0;
-	static bool	o_standing = true;
-	static bool o_resting = false;
-	
-	static bool o_rest = false;
-	static bool o_stand = false;
-
 	SystemClock_Config();
 
 	ism330dhcx_acceleration_raw_get(&dev_ctx, ai_acc_raw);
@@ -314,57 +321,25 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 		++s_step.b_rest_stand_cnt;
 	}
 
-	
 	s_step.o_step_detected = false;
 	
+	++b_rtc_wakeup_cnt;
 	// LORA send
-	if (b_rtc_wakeup_cnt == 24) // 18 is 3 min : 90 is 15 min
+	if (b_rtc_wakeup_cnt >= k_SEND_LORA) // 18 is 3 min : 90 is 15 min
 	{
 		// 	send LORA information every 15 min acc.to this callback period
-		b_rtc_wakeup_cnt = 0;
-		
-		ab_pedometer_data[5] = (uint8_t)(s_step.dw_ref);
-		ab_pedometer_data[6] = (uint8_t)(s_step.dw_ref >> 8);
-		ab_pedometer_data[7] = (uint8_t)(s_step.dw_ref >> 16);
-		ab_pedometer_data[8] = (uint8_t)(s_step.dw_ref >> 24);
-		
-		// w_rec pedometre verisi degildir, silinecek
-		ab_pedometer_data[9] = (uint8_t)(s_step.w_rec);
-		ab_pedometer_data[10] = (uint8_t)(s_step.w_rec >> 8);
-		
-		ab_pedometer_data[11] = (uint8_t)(s_step.w_steps);
-		ab_pedometer_data[12] = (uint8_t)(s_step.w_steps >> 8);
-		
-		ab_pedometer_data[13] = (uint8_t)(s_step.b_time_of_rest);
-		ab_pedometer_data[14] = (uint8_t)(s_step.b_rest_stand_cnt);
-		
-		/*
-		receive example 
-		w_tmp = ab_pedometer_data[10];
-		w_tmp <<= 8;
-		w_tmp |= ab_pedometer_data[9];
-		*/
-
+		assign_data();
 		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
-		//reset step struct
-		CLEAR_STRUCT(s_step);
-		// reset local variables
-		b_rtc_wakeup_cnt = 0;
-		b_standing_watch_cnt = 0;
-		b_rest_watch_cnt = 0;
-		o_stand = false;
-		o_rest = false;
-
+		reset_vars_after_15min();
 	}
-	++b_rtc_wakeup_cnt;
 }
 
 void callback_acc(void)
 {
+	static uint8_t	_10s = 0;
 	SystemClock_Config();
-	HAL_SuspendTick();
-
 	LPTIM1->CNT = 0;
+	
 	while (1)
 	{
 		ism330dhcx_read_reg(&dev_ctx, ISM330DHCX_WAKE_UP_SRC, &b_acc_wake_up_src, 1);
@@ -374,6 +349,7 @@ void callback_acc(void)
 		{
 			break;
 		}
+		
 		if (READ_BIT_POS(b_status_reg, 0))
 		{
 			ism330dhcx_acceleration_raw_get(&dev_ctx, ai_acc_raw);
@@ -391,13 +367,30 @@ void callback_acc(void)
 
 			//***************************************************************************************//
 			// Step detection
-			if (TON(&s_step_ton, o_tilted, LPTIM1->CNT, k_STEP_DEBOUNCE))
+			if (TON_16U(&s_step_ton, o_tilted, LPTIM1->CNT, k_STEP_DEBOUNCE))
 			{
-				TON(&s_step_ton, 0, LPTIM1->CNT, k_STEP_DEBOUNCE);
+				TON_16U(&s_step_ton, 0, LPTIM1->CNT, k_STEP_DEBOUNCE);
 				if (o_rising_edge_detection(&s_step_red, o_tilted))
 				{
 					++s_step.w_steps;
 					s_step.o_step_detected = true;
+				}
+			}
+		}
+		
+		if (TON_16U(&s_watch_rtc_wakeup, 1, LPTIM1->CNT, k_WATCH_RTC_WAKEUP))
+		{
+			TON_16U(&s_watch_rtc_wakeup, 0, LPTIM1->CNT, k_WATCH_RTC_WAKEUP);
+			++_10s;
+			if(_10s >= 50)
+			{
+				_10s = 0;
+				++b_rtc_wakeup_cnt;
+				if(b_rtc_wakeup_cnt >= k_SEND_LORA)
+				{
+					assign_data();
+					lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+					reset_vars_after_15min();
 				}
 			}
 		}
@@ -407,6 +400,12 @@ void callback_acc(void)
 void callback_btn(void)
 {
 	delay_ms(10);
+	assign_data();
+	lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+}
+
+void assign_data(void)
+{
 		ab_pedometer_data[5] = (uint8_t)(s_step.dw_ref);
 		ab_pedometer_data[6] = (uint8_t)(s_step.dw_ref >> 8);
 		ab_pedometer_data[7] = (uint8_t)(s_step.dw_ref >> 16);
@@ -421,10 +420,18 @@ void callback_btn(void)
 		
 		ab_pedometer_data[13] = (uint8_t)(s_step.b_time_of_rest);
 		ab_pedometer_data[14] = (uint8_t)(s_step.b_rest_stand_cnt);
-	
-	lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
 }
 
+void reset_vars_after_15min(void)
+{
+		CLEAR_STRUCT(s_step);
+		// reset local variables
+		b_rtc_wakeup_cnt = 0;
+		b_standing_watch_cnt = 0;
+		b_rest_watch_cnt = 0;
+		o_stand = false;
+		o_rest = false;
+}
 void lora_init_sequence(void)
 {
 	radio.Modulation = LORA;
@@ -475,7 +482,7 @@ void acc_init_sequence(void)
 	ism330dhcx_wkup_ths_weight_set(&dev_ctx, ISM330DHCX_LSb_FS_DIV_64); // FS_XL / 64
 	ism330dhcx_wkup_dur_set(&dev_ctx, 2); // (= val(max 3) * 1 / ODR_XL) = = 77 ms
 	ism330dhcx_act_sleep_dur_set(&dev_ctx, 0); // 16 / ODR_XL for 0  --- 512 / ODR for other val (615 ms)
-	ism330dhcx_wkup_threshold_set(&dev_ctx, 3); // val * (FS_XL / 64) 187.5 mg
+	ism330dhcx_wkup_threshold_set(&dev_ctx, 3); // val * (FS_XL / 64)
 	ism330dhcx_act_mode_set(&dev_ctx, ISM330DHCX_XL_12Hz5_GY_NOT_AFFECTED);
 
 	ism330dhcx_pin_mode_set(&dev_ctx, ISM330DHCX_OPEN_DRAIN);

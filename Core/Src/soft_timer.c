@@ -16,12 +16,12 @@ void timer_check(soft_timer_t *s, uint32_t pdwNow)
 	{
 		if(!s->oAux)
  		{
- 			s->dwSince = pdwNow;
+ 			s->dwSince = pdwNow + s->dwInterval;
  			s->oAux = true;
  		}
-		else if(TIME_OVER(s->dwSince + s->dwInterval, pdwNow))
+		else if(TIME_OVER(s->dwSince, pdwNow))
 		{
-				s->dwSince = pdwNow;
+				s->dwSince = pdwNow + s->dwInterval;
 				s->fp();
 		}
 		else
@@ -78,14 +78,39 @@ void timer_set(soft_timer_t *s, uint32_t dwinterval, void(*fp)(void))
 bool TON(ton_t *s, bool oIn, uint32_t pdwNow, uint32_t dwPresetTime)
 {
 	bool ret_val = false;
+
 	if(oIn)
 	{
 		if(!s->oAux)
  		{
-			s->dwSince = pdwNow;
+			s->dwSince = pdwNow + dwPresetTime;
 			s->oAux = true;
  		}
-		else if(TIME_OVER(s->dwSince + dwPresetTime, pdwNow))
+		else if(TIME_OVER(s->dwSince, pdwNow))
+		{
+			ret_val = true;
+		}
+	}
+	else
+	{
+		s->oAux = false;
+	}
+
+	return ret_val;
+}
+
+bool TON_16U(ton_t *s, bool oIn, uint32_t pdwNow, uint32_t dwPresetTime)
+{
+	bool ret_val = false;
+
+	if(oIn)
+	{
+		if(!s->oAux)
+ 		{
+			s->dwSince = pdwNow + dwPresetTime;
+			s->oAux = true;
+ 		}
+		else if(TIME_OVER_U16(s->dwSince, pdwNow))
 		{
 			ret_val = true;
 		}
