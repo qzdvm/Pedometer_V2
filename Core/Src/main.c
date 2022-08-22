@@ -29,12 +29,13 @@
 #include <string.h>
 #include "soft_timer.h"
 #include "macro.h"
-#include "utils.h"
+#include "edge_detection.h"
 #include "coeffs.h"
 #include "lora.h"
-#include "ism330dhcx_reg.h"
 #include "math.h"
 #include "spi_hal.h"
+#include "AS3933.h"
+#include "lis2hh12_reg.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +51,8 @@ typedef struct
 	uint8_t b_rest_stand_cnt;
 	bool o_step_detected;
 } step_attr_t;
+
+
 
 /* USER CODE END PTD */
 
@@ -78,13 +81,9 @@ static step_attr_t s_step =
 	.dw_ref = k_REF,
 	.w_rec = k_REC,
 };
-static rising_edge_detection_t s_step_red;
-static ton_t s_step_ton;
-static ton_t s_watch_rtc_wakeup;
 
 static stmdev_ctx_t dev_ctx;
-static ism330dhcx_pin_int2_route_t int2_route;
-static ism330dhcx_pin_int1_route_t int1_route;
+static lis2hh12_pin_int1_route_t int1_route;
 
 static float af_acc_mg[3];
 static int16_t ai_acc_raw[3];
@@ -107,6 +106,8 @@ uint32_t k_X_ACCEL_PRESET1=				850;
 uint32_t k_X_ACCEL_PRESET2=				860;
 uint32_t k_STEP_DEBOUNCE=					3700;
 
+uint8_t b_ask_data = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,6 +115,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void lora_init_sequence(void);
 void acc_init_sequence(void);
+void as3933_init_sequence(void);
 void assign_data(void);
 void reset_vars_after_15min(void);
 static void set_stop_mode(void);
@@ -160,11 +162,13 @@ int main(void)
   MX_RTC_Init();
   MX_LPTIM1_Init();
   /* USER CODE BEGIN 2 */
-	LL_GPIO_SetOutputPin(CS_IMU_GPIO_Port, CS_IMU_Pin);
+	LL_GPIO_SetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
 	LL_GPIO_SetOutputPin(CS_LORA_GPIO_Port, CS_LORA_Pin);
+	LL_GPIO_ResetOutputPin(CS_AS3933_GPIO_Port, CS_AS3933_Pin);
 	
 	lora_init_sequence();
 	acc_init_sequence();
+	as3933_init_sequence();
 	
 	ab_pedometer_data[1] = (uint8_t)(s_step.dw_id);
 	ab_pedometer_data[2] = (uint8_t)(s_step.dw_id >> 8);
@@ -172,6 +176,7 @@ int main(void)
 	ab_pedometer_data[4] = (uint8_t)(s_step.dw_id >> 24);
 	
 	set_stop_mode();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -218,7 +223,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV4;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
@@ -248,29 +253,35 @@ static void set_stop_mode(void)
 
 static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *bufp, uint16_t len)
 {
-	HAL_GPIO_WritePin(CS_IMU_GPIO_Port, CS_IMU_Pin, GPIO_PIN_RESET);
+	LL_GPIO_ResetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
 	spi_transmit(SPI1, &reg, 1);
 	spi_transmit(SPI1, bufp, len);
-	HAL_GPIO_WritePin(CS_IMU_GPIO_Port, CS_IMU_Pin, GPIO_PIN_SET);
+	LL_GPIO_SetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
 	return 0;
 }
 
 static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t len)
 {
 	reg |= 0x80;
-	HAL_GPIO_WritePin(CS_IMU_GPIO_Port, CS_IMU_Pin, GPIO_PIN_RESET);
+	LL_GPIO_ResetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
 	spi_transmit(SPI1, &reg, 1);
 	spi_transmit_receive(SPI1, bufp, bufp, len);
-	HAL_GPIO_WritePin(CS_IMU_GPIO_Port, CS_IMU_Pin, GPIO_PIN_SET);
+	LL_GPIO_SetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
 	return 0;
 }
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
 	SystemClock_Config();
+	
+	b_status_reg = 0;
+	while(!READ_BIT_POS(b_status_reg, 3))
+	{
+		lis2hh12_read_reg(&dev_ctx, LIS2HH12_STATUS, &b_status_reg, 1);
+	}
 
-	ism330dhcx_acceleration_raw_get(&dev_ctx, ai_acc_raw);
-	af_acc_mg[0] = ism330dhcx_from_fs4g_to_mg(ai_acc_raw[0]);
+	lis2hh12_acceleration_raw_get(&dev_ctx, ai_acc_raw);
+	af_acc_mg[0] = lis2hh12_from_fs4g_to_mg(ai_acc_raw[0]);
 
 	if (af_acc_mg[0] < k_X_ACCEL_PRESET1)
 	{
@@ -342,18 +353,17 @@ void callback_acc(void)
 	
 	while (1)
 	{
-		ism330dhcx_read_reg(&dev_ctx, ISM330DHCX_WAKE_UP_SRC, &b_acc_wake_up_src, 1);
-		ism330dhcx_read_reg(&dev_ctx, ISM330DHCX_STATUS_REG, &b_status_reg, 1);
-
-		if (READ_BIT_POS(b_acc_wake_up_src, 4))
+		lis2hh12_read_reg(&dev_ctx, LIS2HH12_STATUS, &b_status_reg, 1);
+		
+		if (LL_GPIO_IsInputPinSet(ACC_INT1_GPIO_Port, ACC_INT1_Pin))
 		{
 			break;
 		}
 		
-		if (READ_BIT_POS(b_status_reg, 0))
+		if (READ_BIT_POS(b_status_reg, 3))
 		{
-			ism330dhcx_acceleration_raw_get(&dev_ctx, ai_acc_raw);
-			af_acc_mg[0] = ism330dhcx_from_fs4g_to_mg(ai_acc_raw[0]);
+			lis2hh12_acceleration_raw_get(&dev_ctx, ai_acc_raw);
+			af_acc_mg[0] = lis2hh12_from_fs4g_to_mg(ai_acc_raw[0]);
 
 			if (af_acc_mg[0] < k_X_ACCEL_PRESET1)
 			{
@@ -362,15 +372,15 @@ void callback_acc(void)
 			else if (af_acc_mg[0] > k_X_ACCEL_PRESET2) // to prevent unstable range X_ACCEL_PRESET2
 			{
 				o_tilted = false;
-				(void) o_rising_edge_detection(&s_step_red, o_tilted);
+				(void) edge_detection(ED_STEP, o_tilted);
 			}
 
 			//***************************************************************************************//
 			// Step detection
-			if (TON_16U(&s_step_ton, o_tilted, LPTIM1->CNT, k_STEP_DEBOUNCE))
+			if (TON(TON_STEP, o_tilted, LPTIM1->CNT, k_STEP_DEBOUNCE))
 			{
-				TON_16U(&s_step_ton, 0, LPTIM1->CNT, k_STEP_DEBOUNCE);
-				if (o_rising_edge_detection(&s_step_red, o_tilted))
+				TON(TON_STEP, 0, 0, 0);
+				if (edge_detection(ED_STEP, o_tilted))
 				{
 					++s_step.w_steps;
 					s_step.o_step_detected = true;
@@ -378,9 +388,9 @@ void callback_acc(void)
 			}
 		}
 		
-		if (TON_16U(&s_watch_rtc_wakeup, 1, LPTIM1->CNT, k_WATCH_RTC_WAKEUP))
+		if (TON_16U(TON_WATCH_RTC_WAKEUP, 1, LPTIM1->CNT, k_WATCH_RTC_WAKEUP))
 		{
-			TON_16U(&s_watch_rtc_wakeup, 0, LPTIM1->CNT, k_WATCH_RTC_WAKEUP);
+			TON_16U(TON_WATCH_RTC_WAKEUP, 0, 0, 0);
 			++_10s;
 			if(_10s >= 50)
 			{
@@ -395,6 +405,39 @@ void callback_acc(void)
 			}
 		}
 	}
+}
+
+
+void callback_as3933_wake(void)
+{	
+	uint8_t i = 0;
+	bool o_dat_pin = false;
+	bool o_cl_dat_pin = false;
+
+	TON_16U(TON_AS3933_TIMEOUT, 0, 0, 0);
+	LPTIM1->CNT = 0;
+	b_ask_data = 0;
+	
+	while(i < 8)
+	{
+		o_dat_pin 	 = LL_GPIO_IsInputPinSet(DAT_GPIO_Port, DAT_Pin);
+		o_cl_dat_pin = LL_GPIO_IsInputPinSet(CL_DAT_GPIO_Port, CL_DAT_Pin);
+			
+		if (edge_detection(ED_CL_DAT, o_cl_dat_pin))
+		{
+			o_dat_pin?SET_BIT_POS(b_ask_data, i++):RESET_BIT_POS(b_ask_data, i++);
+		}
+		
+		if(TON_16U(TON_AS3933_TIMEOUT, 1, LPTIM1->CNT, k_AS3933_TIMEOUT))
+		{
+			TON_16U(TON_AS3933_TIMEOUT, 0, 0, 0);
+			break;
+		}
+	}
+			
+	spi1_user_init_high_1edge();
+	as3933_set_listening_mode();
+	spi1_user_init_low_1edge();
 }
 
 void callback_btn(void)
@@ -432,6 +475,7 @@ void reset_vars_after_15min(void)
 		o_stand = false;
 		o_rest = false;
 }
+
 void lora_init_sequence(void)
 {
 	radio.Modulation = LORA;
@@ -456,46 +500,59 @@ void acc_init_sequence(void)
 	dev_ctx.handle = SPI1;
 
 	delay_ms(k_BOOT_TIME);
-	ism330dhcx_device_id_get(&dev_ctx, &whoamI);
-	if (whoamI != ISM330DHCX_ID)
+	lis2hh12_dev_id_get(&dev_ctx, &whoamI);
+	if (whoamI != LIS2HH12_ID)
 		while (1);
 
 	/* Restore default configuration */
-	ism330dhcx_reset_set(&dev_ctx, PROPERTY_ENABLE);
+	lis2hh12_dev_reset_set(&dev_ctx, PROPERTY_ENABLE);
 
 	do
 	{
-		ism330dhcx_reset_get(&dev_ctx, &rst);
+		lis2hh12_dev_reset_get(&dev_ctx, &rst);
 	} while (rst);
 
 	/* Start device configuration. */
-	ism330dhcx_i2c_interface_set(&dev_ctx, ISM330DHCX_I2C_DISABLE);
-	ism330dhcx_spi_mode_set(&dev_ctx, ISM330DHCX_SPI_4_WIRE);
+	lis2hh12_i2c_interface_set(&dev_ctx, LIS2HH12_I2C_DISABLE);
+	lis2hh12_spi_mode_set(&dev_ctx, LIS2HH12_SPI_4_WIRE);
+	
+	lis2hh12_xl_axis_set(&dev_ctx, (lis2hh12_xl_axis_t){.xen = PROPERTY_ENABLE});
 
-	ism330dhcx_device_conf_set(&dev_ctx, PROPERTY_ENABLE);
-	ism330dhcx_block_data_update_set(&dev_ctx, PROPERTY_ENABLE);
-	ism330dhcx_xl_data_rate_set(&dev_ctx, ISM330DHCX_XL_ODR_26Hz);
-	ism330dhcx_xl_full_scale_set(&dev_ctx, ISM330DHCX_4g);
+	lis2hh12_block_data_update_set(&dev_ctx, PROPERTY_ENABLE);
+	lis2hh12_xl_data_rate_set(&dev_ctx, LIS2HH12_XL_ODR_50Hz);
+	lis2hh12_xl_full_scale_set(&dev_ctx, LIS2HH12_4g);
+	
+	lis2hh12_auto_increment_set(&dev_ctx, LIS2HH12_ENABLE);
+	
+	lis2hh12_pin_mode_set(&dev_ctx, LIS2HH12_PUSH_PULL);
+	lis2hh12_pin_polarity_set(&dev_ctx, LIS2HH12_ACTIVE_HIGH);
+	
+	
 
 	/*****		ACTIVITY INACTIVITY		*****/
+	lis2hh12_act_threshold_set(&dev_ctx, 8); // Full scale / 128 [mg] = 31.25 mg
+	lis2hh12_act_duration_set(&dev_ctx, 4); // (8/50) * 4 = 640 ms
 
-	ism330dhcx_wkup_ths_weight_set(&dev_ctx, ISM330DHCX_LSb_FS_DIV_64); // FS_XL / 64
-	ism330dhcx_wkup_dur_set(&dev_ctx, 2); // (= val(max 3) * 1 / ODR_XL) = = 77 ms
-	ism330dhcx_act_sleep_dur_set(&dev_ctx, 0); // 16 / ODR_XL for 0  --- 512 / ODR for other val (615 ms)
-	ism330dhcx_wkup_threshold_set(&dev_ctx, 3); // val * (FS_XL / 64)
-	ism330dhcx_act_mode_set(&dev_ctx, ISM330DHCX_XL_12Hz5_GY_NOT_AFFECTED);
-
-	ism330dhcx_pin_mode_set(&dev_ctx, ISM330DHCX_OPEN_DRAIN);
-	ism330dhcx_pin_polarity_set(&dev_ctx, ISM330DHCX_ACTIVE_HIGH);
-
-//	ism330dhcx_pin_int2_route_get(&dev_ctx, &int2_route);
-//	int2_route.md2_cfg.int2_sleep_change = PROPERTY_ENABLE;
-//	ism330dhcx_pin_int2_route_set(&dev_ctx, &int2_route);
-
-	ism330dhcx_pin_int1_route_get(&dev_ctx, &int1_route);
-	int1_route.md1_cfg.int1_sleep_change = PROPERTY_ENABLE;
-	ism330dhcx_pin_int1_route_set(&dev_ctx, &int1_route);
+	lis2hh12_pin_int1_route_get(&dev_ctx, &int1_route);
+	int1_route.int1_inact = PROPERTY_ENABLE;
+	lis2hh12_pin_int1_route_set(&dev_ctx, int1_route);
 }
+
+
+void as3933_init_sequence(void)
+{
+	spi1_user_init_high_1edge();
+	as3933_write_Rx(AS3933_R0, AS3933_ON_OFF | AS3933_EN_A3 | AS3933_DAT_MASK);
+	as3933_write_Rx(AS3933_R1, AS3933_AGC_UD | AS3933_EN_XTAL | AS3933_EN_MANCH | AS3933_EN_WPAT);
+	as3933_write_Rx(AS3933_R3, AS3933_SET_FS_ENV(2) | AS3933_SET_FS_SCL(5));
+	as3933_write_Rx(AS3933_R4, AS3933_SET_T_OFF(3) | AS3933_SET_D_RES(0) | AS3933_SET_GR(0));
+	as3933_write_Rx(AS3933_R7, AS3933_SET_T_HBIT(10));
+	as3933_write_Rx(AS3933_R19, AS3933_CAP_CH3_8pF);	
+	as3933_reset_rssi();
+	as3933_set_listening_mode();
+	spi1_user_init_low_1edge();
+}
+
 static void delay_ms(uint32_t ms)
 {
 	__IO uint32_t tmp = SysTick->CTRL;

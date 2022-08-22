@@ -69,11 +69,13 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define INT1_Pin LL_GPIO_PIN_14
-#define INT1_GPIO_Port GPIOC
-#define INT1_EXTI_IRQn EXTI4_15_IRQn
-#define CS_IMU_Pin LL_GPIO_PIN_3
-#define CS_IMU_GPIO_Port GPIOA
+#define ACC_INT1_Pin LL_GPIO_PIN_14
+#define ACC_INT1_GPIO_Port GPIOC
+#define ACC_INT1_EXTI_IRQn EXTI4_15_IRQn
+#define CS_AS3933_Pin LL_GPIO_PIN_2
+#define CS_AS3933_GPIO_Port GPIOA
+#define CS_ACC_Pin LL_GPIO_PIN_3
+#define CS_ACC_GPIO_Port GPIOA
 #define CS_LORA_Pin LL_GPIO_PIN_4
 #define CS_LORA_GPIO_Port GPIOA
 #define DIO0_Pin LL_GPIO_PIN_10
@@ -81,6 +83,13 @@ void Error_Handler(void);
 #define BTN_Pin LL_GPIO_PIN_15
 #define BTN_GPIO_Port GPIOA
 #define BTN_EXTI_IRQn EXTI4_15_IRQn
+#define CL_DAT_Pin LL_GPIO_PIN_3
+#define CL_DAT_GPIO_Port GPIOB
+#define DAT_Pin LL_GPIO_PIN_4
+#define DAT_GPIO_Port GPIOB
+#define WAKE_Pin LL_GPIO_PIN_5
+#define WAKE_GPIO_Port GPIOB
+#define WAKE_EXTI_IRQn EXTI4_15_IRQn
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

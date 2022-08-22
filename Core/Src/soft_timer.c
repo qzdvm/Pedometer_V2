@@ -1,35 +1,55 @@
 #include "soft_timer.h"
 
 #define TIME_PASSED(now, since)	(now >= since) ? (now - since) : (now + (UINT32_MAX - since))
+#define TIME_OVER(target,time) ((uint32_t)((time) - (target)) < 0x80000000U)
+#define TIME_OVER_U16(target,time) ((uint16_t)((time) - (target)) < 0x8000U) // max target is 32768
+
+typedef struct
+{
+	bool o_in;
+	bool o_aux;
+	void(*fp)(void);
+	uint32_t dw_interval;
+	uint32_t dw_since;
+} soft_timer_t;
+
+typedef struct
+{
+	bool o_aux;
+	uint32_t dw_since;
+} ton_t;
+
+soft_timer_t s_timer_obj[SOFT_TIMER_OBJ_SIZE];
+ton_t s_ton_obj[TON_OBJ_SIZE];
 
 /**
- * \fn void timeoutCheck(timeout_t *s, const uint32_t *pdwNow, void(*cb)(void))
+ * \fn void timer_check(uint8_t b_id, uint32_t dw_now)
  * \brief Start a periodic timer with a specified duration .
  *
  * \param t - variables are stored which function needs
  * \param now - system tick continuously running
- * \param cb - callback function is called when the timer expired
+ * 
  */
-void timer_check(soft_timer_t *s, uint32_t pdwNow)
+void timer_check(uint8_t b_id, uint32_t dw_now)
 {
-	if(s->oIn)
+	if(s_timer_obj[b_id].o_in)
 	{
-		if(!s->oAux)
+		if(!s_timer_obj[b_id].o_aux)
  		{
- 			s->dwSince = pdwNow + s->dwInterval;
- 			s->oAux = true;
+ 			s_timer_obj[b_id].dw_since = dw_now + s_timer_obj[b_id].dw_interval;
+ 			s_timer_obj[b_id].o_aux = true;
  		}
-		else if(TIME_OVER(s->dwSince, pdwNow))
+		else if(TIME_OVER(s_timer_obj[b_id].dw_since, dw_now))
 		{
-				s->dwSince = pdwNow + s->dwInterval;
-				s->fp();
+				s_timer_obj[b_id].dw_since = dw_now + s_timer_obj[b_id].dw_interval;
+				s_timer_obj[b_id].fp();
 		}
 		else
 		{}
 	}
 	else
 	{
-		s->oAux = false;
+		s_timer_obj[b_id].o_aux = false;
 	}
 }
 
@@ -39,9 +59,9 @@ void timer_check(soft_timer_t *s, uint32_t pdwNow)
  * \param s
  * \param interval
  */
-void timer_start(soft_timer_t *s)
+void timer_start(uint8_t b_id)
 {
-	s->oIn = true;
+	s_timer_obj[b_id].o_in = true;
 }
 
 /**
@@ -49,75 +69,77 @@ void timer_start(soft_timer_t *s)
  * \brief
  * \param s
  */
-void timer_stop(soft_timer_t *s)
+void timer_stop(uint8_t b_id)
 {
-	s->oIn = false;
+	s_timer_obj[b_id].o_in = false;
 }
 
 /**
- * \fn void timerSetInterval(timeout_t*, uint32_t)
- * \brief
- * \param s
- * \param dwinterval
- */
-void timer_set(soft_timer_t *s, uint32_t dwinterval, void(*fp)(void))
+* @brief void timer_set(uint8_t b_id, uint32_t dw_interval, void(*fp)(void))
+* @param b_id
+* @param uint32_t dw_interval
+* @param void(*fp)(void)
+* 
+* @retval none
+**/
+void timer_set(uint8_t b_id, uint32_t dw_interval, void(*fp)(void))
 {
-	s->dwInterval = dwinterval;
-	s->fp = fp;
+	s_timer_obj[b_id].dw_interval = dw_interval;
+	s_timer_obj[b_id].fp = fp;
 }
 
 /**
- * \fn uint8_t TON(ton_t *s, bool oIn, const uint32_t *pdwNow, uint32_t dwPresetTime)
+ * \fn bool TON(uint8_t b_id, bool o_in, uint32_t dw_now, uint32_t dw_preset_time)
  * \brief Start a timer with a specified duration as on-delay.
- * \param t - variables are stored which function needs
- * \param in - timer is executed when the "in" state changes from 0 to 1
- * \param now - system tick continuously running
- * \param presetTime - timer is started for the time stored in
+ * \param b_id active TON obj selection
+ * \param o_in - timer is executed when the "in" state changes from 0 to 1
+ * \param dw_now - system tick continuously running
+ * \param dw_preset_time - timer is started for the time stored in
  * \return if time is over , return value is 1
  */
-bool TON(ton_t *s, bool oIn, uint32_t pdwNow, uint32_t dwPresetTime)
+bool TON(uint8_t b_id, bool o_in, uint32_t dw_now, uint32_t dw_preset_time)
 {
 	bool ret_val = false;
 
-	if(oIn)
+	if(o_in)
 	{
-		if(!s->oAux)
+		if(!s_ton_obj[b_id].o_aux)
  		{
-			s->dwSince = pdwNow + dwPresetTime;
-			s->oAux = true;
+			s_ton_obj[b_id].dw_since = dw_now + dw_preset_time;
+			s_ton_obj[b_id].o_aux = true;
  		}
-		else if(TIME_OVER(s->dwSince, pdwNow))
+		else if(TIME_OVER(s_ton_obj[b_id].dw_since, dw_now))
 		{
 			ret_val = true;
 		}
 	}
 	else
 	{
-		s->oAux = false;
+		s_ton_obj[b_id].o_aux = false;
 	}
 
 	return ret_val;
 }
 
-bool TON_16U(ton_t *s, bool oIn, uint32_t pdwNow, uint32_t dwPresetTime)
+bool TON_16U(uint8_t b_id, bool o_in, uint32_t dw_now, uint32_t dw_preset_time)
 {
 	bool ret_val = false;
 
-	if(oIn)
+	if(o_in)
 	{
-		if(!s->oAux)
+		if(!s_ton_obj[b_id].o_aux)
  		{
-			s->dwSince = pdwNow + dwPresetTime;
-			s->oAux = true;
+			s_ton_obj[b_id].dw_since = dw_now + dw_preset_time;
+			s_ton_obj[b_id].o_aux = true;
  		}
-		else if(TIME_OVER_U16(s->dwSince, pdwNow))
+		else if(TIME_OVER_U16((uint16_t)s_ton_obj[b_id].dw_since, (uint16_t)dw_now))
 		{
 			ret_val = true;
 		}
 	}
 	else
 	{
-		s->oAux = false;
+		s_ton_obj[b_id].o_aux = false;
 	}
 
 	return ret_val;

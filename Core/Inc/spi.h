@@ -39,7 +39,8 @@ extern "C" {
 void MX_SPI1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-
+void spi1_user_init_low_1edge(void);
+void spi1_user_init_high_1edge(void);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

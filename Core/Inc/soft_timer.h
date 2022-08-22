@@ -4,35 +4,23 @@
 #include "stdint.h"
 #include "stdbool.h"
 
-/**
- * \def TIME_OVER
- * \brief check if time over in max 24.8 days acc.to ms
- *
- */
-#define TIME_OVER(target,time) ((uint32_t)((time) - (target)) < 0x80000000U)
-#define TIME_OVER_U16(target,time) ((uint16_t)((time) - (target)) < 0x8000U) // max target is 32768
-
-typedef struct
+enum 
 {
-	bool oIn;
-	bool oAux;
-	void(*fp)(void);
-	uint32_t dwInterval;
-	uint32_t dwSince;
-} soft_timer_t;
+	TON_STEP = 0,
+	TON_WATCH_RTC_WAKEUP,
+	TON_AS3933_TIMEOUT,
+	TON_END,
+};
 
-typedef struct
-{
-	bool oAux;
-	uint32_t dwSince;
-} ton_t;
+#define SOFT_TIMER_OBJ_SIZE	  1
+#define TON_OBJ_SIZE					TON_END
 
-void timer_check(soft_timer_t *s, uint32_t pdwNow);
-void timer_start(soft_timer_t *s);
-void timer_stop(soft_timer_t *s);
-void timer_set(soft_timer_t *s, uint32_t dwinterval, void(*cb)(void));
-bool TON(ton_t *s, bool oIn, uint32_t pdwNow, uint32_t dwPresetTime);
-bool TON_16U(ton_t *s, bool oIn, uint32_t pdwNow, uint32_t dwPresetTime);
+void timer_check(uint8_t b_id, uint32_t dw_now);
+void timer_start(uint8_t b_id);
+void timer_stop(uint8_t b_id);
+void timer_set(uint8_t b_id, uint32_t dw_interval, void(*cb)(void));
+bool TON(uint8_t b_id, bool o_in, uint32_t dw_now, uint32_t dw_preset_time);
+bool TON_16U(uint8_t b_id, bool o_in, uint32_t dw_now, uint32_t dw_preset_time);
 
 
 #endif /* SOFT_TIMER_H */
