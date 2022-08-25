@@ -44,7 +44,6 @@ typedef struct
 {
 	uint32_t dw_id;
 	uint32_t dw_ref;
-	uint16_t w_rec;
 	uint16_t w_steps;
 	uint8_t b_time_of_rest;
 	uint8_t b_time_of_stand;
@@ -79,7 +78,6 @@ static step_attr_t s_step =
 {
 	.dw_id = k_ID,
 	.dw_ref = k_REF,
-	.w_rec = k_REC,
 };
 
 static stmdev_ctx_t dev_ctx;
@@ -454,15 +452,11 @@ void assign_data(void)
 		ab_pedometer_data[7] = (uint8_t)(s_step.dw_ref >> 16);
 		ab_pedometer_data[8] = (uint8_t)(s_step.dw_ref >> 24);
 		
-		// w_rec pedometre verisi degildir, silinecek
-		ab_pedometer_data[9] = (uint8_t)(s_step.w_rec);
-		ab_pedometer_data[10] = (uint8_t)(s_step.w_rec >> 8);
+		ab_pedometer_data[9] = (uint8_t)(s_step.w_steps);
+		ab_pedometer_data[10] = (uint8_t)(s_step.w_steps >> 8);
 		
-		ab_pedometer_data[11] = (uint8_t)(s_step.w_steps);
-		ab_pedometer_data[12] = (uint8_t)(s_step.w_steps >> 8);
-		
-		ab_pedometer_data[13] = (uint8_t)(s_step.b_time_of_rest);
-		ab_pedometer_data[14] = (uint8_t)(s_step.b_rest_stand_cnt);
+		ab_pedometer_data[11] = (uint8_t)(s_step.b_time_of_rest);
+		ab_pedometer_data[12] = (uint8_t)(s_step.b_rest_stand_cnt);
 }
 
 void reset_vars_after_15min(void)
@@ -527,8 +521,6 @@ void acc_init_sequence(void)
 	lis2hh12_pin_mode_set(&dev_ctx, LIS2HH12_PUSH_PULL);
 	lis2hh12_pin_polarity_set(&dev_ctx, LIS2HH12_ACTIVE_HIGH);
 	
-	
-
 	/*****		ACTIVITY INACTIVITY		*****/
 	lis2hh12_act_threshold_set(&dev_ctx, 8); // Full scale / 128 [mg] = 31.25 mg
 	lis2hh12_act_duration_set(&dev_ctx, 4); // (8/50) * 4 = 640 ms
