@@ -102,6 +102,7 @@ static bool o_resting = false;
 static bool o_rest = false;
 static bool o_stand = false;
 
+// determine the exact result in runtime and add them in coeffs.h and delete them for production 
 uint32_t k_X_ACCEL_PRESET1=				850;
 uint32_t k_X_ACCEL_PRESET2=				860;
 uint32_t k_STEP_DEBOUNCE=					3700;
@@ -168,11 +169,8 @@ int main(void)
 	LL_GPIO_ResetOutputPin(CS_AS3933_GPIO_Port, CS_AS3933_Pin);
 	
 	acc_init_sequence();
-	delay_ms(100);
 	lora_init_sequence();
-	delay_ms(100);
 	as3933_init_sequence();
-	delay_ms(100);
 	
 	ab_pedometer_data[1] = (uint8_t)(s_step.dw_id);
 	ab_pedometer_data[2] = (uint8_t)(s_step.dw_id >> 8);
@@ -295,7 +293,7 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 	{
 		o_tilted = true;
 	}
-	else if (af_acc_mg[0] > k_X_ACCEL_PRESET1) // to prevent unstable range X_ACCEL_PRESET2
+	else if (af_acc_mg[0] > k_X_ACCEL_PRESET2) // to prevent unstable range X_ACCEL_PRESET2
 	{
 		o_tilted = false;
 	}
@@ -313,26 +311,24 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 	if (o_resting && !o_standing)	// RESTING
 	{
 		++b_rest_watch_cnt;
-		if(b_rest_watch_cnt >= k_REST_EXACT)
+		if(b_rest_watch_cnt >= k_SIT_DOWN)
 		{
-			++s_step.b_time_of_rest;
-			if(o_stand) // detection sit-down
+			if(o_stand) // detection of sit-down
 			{
 				o_rest = true;
 			}
 		}
+		if(b_rest_watch_cnt >= k_REST_EXACT) {++s_step.b_time_of_rest;}
 	}
 	
 	if(o_standing && !o_resting)  // STANDING
 	{
 		++b_standing_watch_cnt;
-		if (b_standing_watch_cnt >= k_STAND_EXACT)
-		{
-			++s_step.b_time_of_stand;
-			o_stand = true;
-		}
+		if(b_standing_watch_cnt >= k_SIT_DOWN) {o_stand = true;}
+		if (b_standing_watch_cnt >= k_STAND_EXACT) {++s_step.b_time_of_stand;}
 	}
 	
+	/* increase the rest_stand counter */
 	if(o_stand && o_rest)
 	{
 		o_stand = false;
@@ -347,7 +343,7 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 	if (b_rtc_wakeup_cnt >= k_SEND_LORA) // 18 is 3 min : 90 is 15 min
 	{
 		// 	send LORA information every 15 min acc.to this callback period
-		if(b_rest_watch_cnt >= 8){s_step.b_time_of_rest += 8;}
+		if(b_rest_watch_cnt >= k_REST_EXACT) {s_step.b_time_of_rest += (k_REST_EXACT - 1);}
 		update_pedometer_data();
 		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
 		reset_vars_after_15min();
@@ -453,6 +449,7 @@ void callback_btn(void)
 {
 	SystemClock_Config();
 	delay_Xms();
+	while(LL_GPIO_IsInputPinSet(BTN_GPIO_Port, BTN_Pin) == true);
 	update_pedometer_data();
 	lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
 }

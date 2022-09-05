@@ -13,8 +13,9 @@
 #define k_REST_EXACT				8
 #define k_STAND_POSSIBLE		4
 #define	k_STAND_EXACT				8
+#define k_SIT_DOWN					2
 
-#define k_SEND_LORA					18 // (24) * 10 / 60	= 4 min
+#define k_SEND_LORA					18 // (24) * 10 / 60	= 4 min  -  18  3 min
 
 #define	k_SOH										0x01
 #define k_EOT										0x04
