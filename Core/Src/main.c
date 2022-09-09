@@ -345,7 +345,11 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 		// 	send LORA information every 15 min acc.to this callback period
 		if(b_rest_watch_cnt >= k_REST_EXACT) {s_step.b_time_of_rest += (k_REST_EXACT - 1);}
 		update_pedometer_data();
+		lora_standby();
+		delay_ms(2);
 		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+		delay_ms(2);
+		lora_sleep();
 		reset_vars_after_15min();
 	}
 }
@@ -451,7 +455,11 @@ void callback_btn(void)
 	delay_Xms();
 	while(LL_GPIO_IsInputPinSet(BTN_GPIO_Port, BTN_Pin) == true);
 	update_pedometer_data();
+	lora_standby();
+	delay_ms(2);
 	lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+	delay_ms(2);
+	lora_sleep();
 }
 
 void update_pedometer_data(void)
@@ -484,7 +492,7 @@ void lora_init_sequence(void)
 	radio.Modulation = LORA;
 	radio.COB = RFM98;
 	radio.Frequency = 434000;
-	radio.OutputPower = 17; //dBm
+	radio.OutputPower = 13; //dBm
 	radio.PreambleLength = 12;
 	radio.FixedPktLength = false; //explicit header mode for LoRa
 	radio.PayloadLength = k_PEDOMETER_DATA_SIZE;
@@ -493,7 +501,8 @@ void lora_init_sequence(void)
 	radio.BWSel = BW125K;
 	radio.CRSel = CR4_5;
 	lora_init(&radio);
-	lora_standby();
+//	lora_standby();
+	lora_sleep();
 }
 
 void acc_init_sequence(void)

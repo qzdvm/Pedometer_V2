@@ -625,7 +625,7 @@ void lora_standby(void)
 	spi_read(RegOpMode, &tmp, 1);
 	tmp &= MODE_MASK;
 	tmp |= RADIO_STANDBY;
-	spi_write(((uint16_t) RegOpMode << 8) + tmp);
+	spi_write(((uint32_t) RegOpMode << 8) + tmp);
 }
 
 /**********************************************************
@@ -640,7 +640,7 @@ void lora_sleep(void)
 	spi_read(RegOpMode, &tmp, 1);
 	tmp &= MODE_MASK;
 	tmp |= RADIO_SLEEP;
-	spi_write(((uint16_t) RegOpMode << 8) + tmp);
+	spi_write(((int32_t) RegOpMode << 8) + tmp);
 }
 
 /**********************************************************
@@ -655,7 +655,7 @@ bool lora_send_msg(lora_t *s, const uint8_t *msg, uint8_t length)
 {
 	uint8_t tmp;
 	uint32_t overtime;
-	uint16_t bittime;
+	int64_t bittime;
 
 	if (s->Modulation == LORA)
 	{
