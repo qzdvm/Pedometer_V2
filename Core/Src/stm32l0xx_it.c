@@ -179,14 +179,9 @@ void EXTI4_15_IRQHandler(void)
   }
   if (LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_15) != RESET)
   {
-	 /* USER CODE BEGIN 1 */
-		callback_btn();
-    /* USER CODE END 1 */
-	  
-
     LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_15);
     /* USER CODE BEGIN LL_EXTI_LINE_15 */
-		
+		callback_btn();
     /* USER CODE END LL_EXTI_LINE_15 */
   }
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */

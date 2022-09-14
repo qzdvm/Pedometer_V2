@@ -124,6 +124,9 @@ static int32_t platform_write(void *handle, uint8_t reg, const uint8_t *bufp, ui
 static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t len);
 static void delay_ms(uint32_t ms);
 static void delay_Xms(void);
+
+void gpio_set_analog(void);
+void gpio_set_app_default(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -278,8 +281,7 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t 
 
 void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 {
-	SystemClock_Config();
-	
+//	SystemClock_Config();
 	b_status_reg = 0;
 	while(!READ_BIT_POS(b_status_reg, 3))
 	{
@@ -343,21 +345,21 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 	if (b_rtc_wakeup_cnt >= k_SEND_LORA) // 18 is 3 min : 90 is 15 min
 	{
 		// 	send LORA information every 15 min acc.to this callback period
-		if(b_rest_watch_cnt >= k_REST_EXACT) {s_step.b_time_of_rest += (k_REST_EXACT - 1);}
-		update_pedometer_data();
-		lora_standby();
-		delay_ms(2);
-		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
-		delay_ms(2);
-		lora_sleep();
-		reset_vars_after_15min();
+//		if(b_rest_watch_cnt >= k_REST_EXACT) {s_step.b_time_of_rest += (k_REST_EXACT - 1);}
+//		update_pedometer_data();
+//		lora_standby();
+//		delay_ms(5);
+//		lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+//		delay_ms(5);
+//		lora_sleep();
+//		reset_vars_after_15min();
 	}
 }
 
 void callback_acc(void)
 {
 	static uint8_t	_10s = 0;
-	SystemClock_Config();
+//	SystemClock_Config();
 	LPTIM1->CNT = 0;
 	
 	while (1)
@@ -407,9 +409,13 @@ void callback_acc(void)
 				++b_rtc_wakeup_cnt;
 				if(b_rtc_wakeup_cnt >= k_SEND_LORA)
 				{
-					update_pedometer_data();
-					lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
-					reset_vars_after_15min();
+//					update_pedometer_data();
+//					lora_standby();
+//					delay_ms(5);
+//					lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
+//					delay_ms(5);
+//					lora_sleep();
+//					reset_vars_after_15min();
 				}
 			}
 		}
@@ -451,15 +457,16 @@ void callback_as3933_wake(void)
 
 void callback_btn(void)
 {
-	SystemClock_Config();
-	delay_Xms();
-	while(LL_GPIO_IsInputPinSet(BTN_GPIO_Port, BTN_Pin) == true);
+//	SystemClock_Config();
 	update_pedometer_data();
 	lora_standby();
-	delay_ms(2);
+	delay_ms(20);
 	lora_send_msg(&radio, ab_pedometer_data, k_PEDOMETER_DATA_SIZE);
-	delay_ms(2);
+	delay_ms(5);
 	lora_sleep();
+	LL_GPIO_SetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
+	LL_GPIO_SetOutputPin(CS_LORA_GPIO_Port, CS_LORA_Pin);
+	LL_GPIO_SetOutputPin(CS_AS3933_GPIO_Port, CS_AS3933_Pin);
 }
 
 void update_pedometer_data(void)
@@ -501,7 +508,8 @@ void lora_init_sequence(void)
 	radio.BWSel = BW125K;
 	radio.CRSel = CR4_5;
 	lora_init(&radio);
-//	lora_standby();
+	lora_standby();
+	delay_ms(100);
 	lora_sleep();
 }
 
@@ -536,6 +544,7 @@ void acc_init_sequence(void)
 	
 	lis2hh12_auto_increment_set(&dev_ctx, LIS2HH12_ENABLE);
 	
+//	lis2hh12_pin_mode_set(&dev_ctx, LIS2HH12_OPEN_DRAIN);
 	lis2hh12_pin_mode_set(&dev_ctx, LIS2HH12_PUSH_PULL);
 	lis2hh12_pin_polarity_set(&dev_ctx, LIS2HH12_ACTIVE_HIGH);
 	
@@ -562,6 +571,7 @@ void as3933_init_sequence(void)
 	as3933_set_listening_mode();
 	spi1_user_init_low_1edge();
 }
+
 
 static void delay_ms(uint32_t ms)
 {
