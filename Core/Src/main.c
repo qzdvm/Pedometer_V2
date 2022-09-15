@@ -125,8 +125,7 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t 
 static void delay_ms(uint32_t ms);
 static void delay_Xms(void);
 
-void gpio_set_analog(void);
-void gpio_set_app_default(void);
+void gpio_set_all_cs(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -354,6 +353,7 @@ void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 //		lora_sleep();
 //		reset_vars_after_15min();
 	}
+	gpio_set_all_cs();
 }
 
 void callback_acc(void)
@@ -420,6 +420,7 @@ void callback_acc(void)
 			}
 		}
 	}
+	gpio_set_all_cs();
 }
 
 
@@ -453,8 +454,15 @@ void callback_as3933_wake(void)
 	spi1_user_init_high_1edge();
 	as3933_set_listening_mode();
 	spi1_user_init_low_1edge();
+	gpio_set_all_cs();
 }
 
+void gpio_set_all_cs(void)
+{
+	LL_GPIO_SetOutputPin(CS_ACC_GPIO_Port, CS_ACC_Pin);
+	LL_GPIO_SetOutputPin(CS_LORA_GPIO_Port, CS_LORA_Pin);
+	LL_GPIO_SetOutputPin(CS_AS3933_GPIO_Port, CS_AS3933_Pin);
+}
 void callback_btn(void)
 {
 //	SystemClock_Config();
@@ -536,15 +544,14 @@ void acc_init_sequence(void)
 	lis2hh12_i2c_interface_set(&dev_ctx, LIS2HH12_I2C_DISABLE);
 	lis2hh12_spi_mode_set(&dev_ctx, LIS2HH12_SPI_4_WIRE);
 	
-	lis2hh12_xl_axis_set(&dev_ctx, (lis2hh12_xl_axis_t){.xen = PROPERTY_ENABLE});
+	lis2hh12_xl_axis_set(&dev_ctx, (lis2hh12_xl_axis_t){.xen = PROPERTY_ENABLE, .yen = PROPERTY_DISABLE, .zen = PROPERTY_DISABLE});
 
 	lis2hh12_block_data_update_set(&dev_ctx, PROPERTY_ENABLE);
-	lis2hh12_xl_data_rate_set(&dev_ctx, LIS2HH12_XL_ODR_50Hz);
+	lis2hh12_xl_data_rate_set(&dev_ctx, LIS2HH12_XL_ODR_OFF);
 	lis2hh12_xl_full_scale_set(&dev_ctx, LIS2HH12_4g);
 	
 	lis2hh12_auto_increment_set(&dev_ctx, LIS2HH12_ENABLE);
 	
-//	lis2hh12_pin_mode_set(&dev_ctx, LIS2HH12_OPEN_DRAIN);
 	lis2hh12_pin_mode_set(&dev_ctx, LIS2HH12_PUSH_PULL);
 	lis2hh12_pin_polarity_set(&dev_ctx, LIS2HH12_ACTIVE_HIGH);
 	
